@@ -194,47 +194,30 @@ app.get(
   }
 );
 
-app.get(
-  "/tweets/:tweetId/replies/",
-  authenticateToken,
-  async (request, response) => {
-    const { username } = request;
-    const { tweetId } = request.params;
-    const checkFollowQuery = `SELECT EXISTS(
-                                SELECT 1
-                                FROM follower F
-                                JOIN tweet T ON  F.following_user_id = T.user_id
-                                WHERE F.follower_user_id = (SELECT user_id
-                                                                FROM user
-                                                                WHERE username="${username}") AND T.tweet_id = ${tweetId}) AS follows;`;
-    const checkFollow = await db.get(checkFollowQuery);
+app.get("/tweets/:tweetId/replies/",async (request, response) => {
+const { tweetId } = request.params;//Getting the TweetId
+﻿const getFollowingQuery = `SELECT
+        DISTINCT(tweet_id)
+    FROM
+        follower INNER JOIN tweet
+    ON follower.following_user_id=tweet.user_id
+    WHERE tweet.tweet_id=${tweetId};`;//Getting tweetId of the followers
 
-    if (checkFollow.follows === 0) {
-      response.status(401);
-      response.send("Invalid Request");
-    } else {
-      const tweetQuery = `SELECT * FROM tweet WHERE tweet_id = ${tweetId};`;
-      const tweet = await db.get(tweetQuery);
-      const getReplyQuery = `SELECT  U.username as name, R.reply as reply
-                                FROM reply R
-                                JOIN user U ON R.user_id = U.user_id
-                                JOIN tweet T ON R.tweet_id = T.tweet_id
-                                WHERE R.tweet_id = ${tweetId};`;
-      const replies = await db.all(getReplyQuery);
+const results =await db.get(getFollowingQuery);
 
-      const formattedReplies = replies.map((reply) => ({
-        name: reply.name,
-        reply: reply.reply,
-      }));
-      const result = {
-        tweet: tweet,
-        replies: formattedReplies,
-      };
-
-      response.send(result);
-    }
+if (results === undefined) {//If there is no results found then the request is invalid
+        response.status(401);
+        response.send("Invalid Request");
+      }else {
+const tweetInfoQuery = `
+       SELECT
+        name,reply
+       FROM reply NATURAL JOIN user
+       WHERE tweet_id= ${tweetId};`;//Getting the name and replies of the tweet.
+﻿const dbResponse = await db.all(tweetInfoQuery);
+response.send({ replies: dbResponse });//Sending response as given in the description.
   }
-);
+});
 
 app.get("/user/tweets/", authenticateToken, async (request, response) => {
   const { username } = request;
